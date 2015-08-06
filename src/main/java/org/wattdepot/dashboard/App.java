@@ -14,11 +14,16 @@ import com.mongodb.ServerAddress;
 import org.wattdepot.client.http.api.WattDepotClient;
 import org.wattdepot.common.domainmodel.Depository;
 import org.wattdepot.common.domainmodel.DepositoryList;
+import org.wattdepot.common.domainmodel.Sensor;
+import org.wattdepot.common.domainmodel.SensorGroup;
+import org.wattdepot.common.domainmodel.SensorGroupList;
 import org.wattdepot.common.domainmodel.SensorList;
 import org.wattdepot.common.exception.BadCredentialException;
 import org.wattdepot.common.exception.IdNotFoundException;
+import org.wattdepot.common.exception.NoMeasurementException;
 
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
@@ -30,10 +35,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  */
 public class App {
   public static void main(String[] args) {
-    System.out.println("Hello World!");
 //    try {
-//      MongoClient mongoClient = new MongoClient("localhost", 27017);
-//      DB db = mongoClient.getDB("hale_aloha");
 //      Set<String> names = db.getCollectionNames();
 //      System.out.println("Collection names:");
 //      for (String name : names) {
@@ -51,6 +53,8 @@ public class App {
 //      e.printStackTrace();
 //    }
     try {
+      MongoClient mongoClient = new MongoClient("localhost", 27017);
+      DB db = mongoClient.getDB("hale_aloha");
       WattDepotClient client = new WattDepotClient("http://mopsa.ics.hawaii.edu:8192/", "cmoore", "uhm", "secret1");
       DepositoryList depositories = client.getDepositories();
       Depository power = null;
@@ -63,17 +67,47 @@ public class App {
           energy = d;
         }
       }
+      ArrayList<SensorGroup> towerTotalGroups = new ArrayList<SensorGroup>();
+      SensorGroupList groups = client.getSensorGroups();
+      for (SensorGroup g : groups.getGroups()) {
+        if (g.getId().endsWith("total")) {
+          towerTotalGroups.add(g);
+        }
+      }
+      System.out.println(towerTotalGroups);
 //      System.out.println(depositories.getDepositories());
       SensorList sensors = client.getSensors();
 //      System.out.println(sensors.getSensors().size());
       sensors = client.getDepositorySensors(power.getId());
 //      System.out.println(sensors.getSensors().size());
 //      System.out.println(sensors.getSensors());
-      System.out.println(client.getLatestValue(power, sensors.getSensors().get(0)));
+      DBCollection powerCollection = db.getCollection("power");
+      ValueFactory factory = ValueFactory.getInstance();
+      for (SensorGroup g : towerTotalGroups) {
+        TowerCurrentPower tcp = factory.getCurrentPower(power, g);
+        String towerId = tcp.getTowerId();
+        int index = towerId.indexOf('-');
+        towerId = towerId.substring(0, index);
+//        System.out.println(towerId);
+        BasicDBObject doc = new BasicDBObject("tower", towerId)
+            .append("value", tcp.getCurrentValue())
+            .append("minimum", tcp.getHistoricalMin())
+            .append("maximum", tcp.getHistoricalMax())
+            .append("createdAt", new Date());
+        powerCollection.insert(doc);
+      }
 
-    } catch (BadCredentialException e) {
+    }
+//    catch (NoMeasurementException e) {
+//      e.printStackTrace();
+//    }
+    catch (IdNotFoundException e) {
       e.printStackTrace();
-    } catch (IdNotFoundException e) {
+    }
+    catch (BadCredentialException e) {
+      e.printStackTrace();
+    }
+    catch (UnknownHostException e) {
       e.printStackTrace();
     }
   }
