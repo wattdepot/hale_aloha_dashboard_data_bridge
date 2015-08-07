@@ -13,6 +13,15 @@ public class CurrentPower {
   private double historicalMin;
   private double historicalMax;
   private double currentValue;
+  private double historicalAve;
+
+  public double getHistoricalAve() {
+    return historicalAve;
+  }
+
+  public void setHistoricalAve(double historicalAve) {
+    this.historicalAve = historicalAve;
+  }
 
   public XMLGregorianCalendar getTimestamp() {
     return timestamp;

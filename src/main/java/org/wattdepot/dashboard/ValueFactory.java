@@ -73,20 +73,20 @@ public class ValueFactory {
       ret.setNumSensorsReporting(0);
       ret.setHistoricalMax(0.0);
       ret.setHistoricalMin(0.0);
+      ret.setHistoricalAve(0.0);
       ret.setCurrentValue(0.0);
       for (String sensorId : towerGroup.getSensors()) {
         try {
           Sensor s = client.getSensor(sensorId);
           ret.setNumSensors(ret.getNumSensors() + 1);
           CurrentPower power = getCurrentPower(depository, s);
-          if (ret.getTimestamp() == null) {
-            ret.setTimestamp(power.getTimestamp());
-          }
           if (power != null) {
             ret.setNumSensorsReporting(ret.getNumSensorsReporting() + 1);
             ret.setHistoricalMin(ret.getHistoricalMin() + power.getHistoricalMin());
             ret.setHistoricalMax(ret.getHistoricalMax() + power.getHistoricalMax());
+            ret.setHistoricalAve(ret.getHistoricalAve() + power.getHistoricalAve());
             ret.setCurrentValue(ret.getCurrentValue() + power.getCurrentValue());
+            ret.setTimestamp(power.getTimestamp());
           }
         }
         catch (IdNotFoundException e) {
@@ -126,6 +126,7 @@ public class ValueFactory {
       currentPower.setTimestamp(time);
       currentPower.setHistoricalMax(historicalMinMax.getMax());
       currentPower.setHistoricalMin(historicalMinMax.getMin());
+      currentPower.setHistoricalAve(historicalMinMax.getAverage());
       return currentPower;
     }
     return null;
@@ -150,6 +151,8 @@ public class ValueFactory {
     XMLGregorianCalendar endHour = endingHour(now);
     Double min = Double.MAX_VALUE;
     Double max = Double.MIN_VALUE;
+    Double sum = 0.0;
+    Integer count = 0;
     for (int i = 0; i < weeks; i++) {
       beginHour = Tstamp.incrementDays(beginHour, -7); // a week ago
       endHour = Tstamp.incrementDays(endHour, -7); // a week ago
@@ -165,8 +168,14 @@ public class ValueFactory {
           max = val.getValue();
         }
       }
+      valueList = client.getAverageValues(depository, sensor, DateConvert.convertXMLCal(beginHour), DateConvert.convertXMLCal(endHour), 15, true);
+      for (InterpolatedValue val : valueList.getInterpolatedValues()) {
+        sum += val.getValue();
+        count++;
+      }
+
     }
-    HourlyMinMax hourlyMinMax = new HourlyMinMax(beginHour, min, max);
+    HourlyMinMax hourlyMinMax = new HourlyMinMax(beginHour, min, max, sum / count);
     return hourlyMinMax;
   }
 

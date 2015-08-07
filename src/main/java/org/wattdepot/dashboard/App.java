@@ -21,6 +21,7 @@ import org.wattdepot.common.domainmodel.SensorList;
 import org.wattdepot.common.exception.BadCredentialException;
 import org.wattdepot.common.exception.IdNotFoundException;
 import org.wattdepot.common.exception.NoMeasurementException;
+import org.wattdepot.common.util.DateConvert;
 
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -83,18 +84,27 @@ public class App {
 //      System.out.println(sensors.getSensors());
       DBCollection powerCollection = db.getCollection("power");
       ValueFactory factory = ValueFactory.getInstance();
-      for (SensorGroup g : towerTotalGroups) {
-        TowerCurrentPower tcp = factory.getCurrentPower(power, g);
-        String towerId = tcp.getTowerId();
-        int index = towerId.indexOf('-');
-        towerId = towerId.substring(0, index);
+      for (int i = 0; i < 10; i++) {
+        for (SensorGroup g : towerTotalGroups) {
+          TowerCurrentPower tcp = factory.getCurrentPower(power, g);
+          System.out.println(tcp);
+          String towerId = tcp.getTowerId();
+          int index = towerId.indexOf('-');
+          towerId = towerId.substring(0, index);
 //        System.out.println(towerId);
-        BasicDBObject doc = new BasicDBObject("tower", towerId)
-            .append("value", tcp.getCurrentValue())
-            .append("minimum", tcp.getHistoricalMin())
-            .append("maximum", tcp.getHistoricalMax())
-            .append("createdAt", new Date());
-        powerCollection.insert(doc);
+          BasicDBObject doc = new BasicDBObject("tower", towerId)
+              .append("value", tcp.getCurrentValue())
+              .append("minimum", tcp.getHistoricalMin())
+              .append("maximum", tcp.getHistoricalMax())
+              .append("average", tcp.getHistoricalAve())
+              .append("meters", tcp.getNumSensors())
+              .append("reporting", tcp.getNumSensorsReporting())
+              .append("timestamp", DateConvert.convertXMLCal(tcp.getTimestamp()))
+              .append("createdAt", new Date());
+          powerCollection.insert(doc);
+        }
+        //Pause for 4 seconds
+        Thread.sleep(15000);
       }
 
     }
@@ -108,6 +118,9 @@ public class App {
       e.printStackTrace();
     }
     catch (UnknownHostException e) {
+      e.printStackTrace();
+    }
+    catch (InterruptedException e) {
       e.printStackTrace();
     }
   }

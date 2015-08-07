@@ -8,12 +8,22 @@ import javax.xml.datatype.XMLGregorianCalendar;
 public class HourlyMinMax {
   private Double min;
   private Double max;
+  private Double average;
   private XMLGregorianCalendar hour;
 
-  public HourlyMinMax(XMLGregorianCalendar hour, Double min, Double max) {
+  public HourlyMinMax(XMLGregorianCalendar hour, Double min, Double max, Double average) {
     this.hour = hour;
     this.max = max;
     this.min = min;
+    this.average = average;
+  }
+
+  public Double getAverage() {
+    return average;
+  }
+
+  public void setAverage(Double average) {
+    this.average = average;
   }
 
   public Double getMin() {
@@ -68,6 +78,7 @@ public class HourlyMinMax {
         "min=" + min +
         ", max=" + max +
         ", hour=" + hour +
+        ", average=" + average +
         '}';
   }
 }

@@ -12,6 +12,7 @@ public class TowerCurrentPower {
   private XMLGregorianCalendar timestamp;
   private double historicalMin;
   private double historicalMax;
+  private double historicalAve;
   private double currentValue;
 
   @Override
@@ -23,8 +24,17 @@ public class TowerCurrentPower {
         ", timestamp=" + timestamp +
         ", historicalMin=" + historicalMin +
         ", historicalMax=" + historicalMax +
+        ", historicalAve=" + historicalAve +
         ", currentValue=" + currentValue +
         '}';
+  }
+
+  public double getHistoricalAve() {
+    return historicalAve;
+  }
+
+  public void setHistoricalAve(double historicalAve) {
+    this.historicalAve = historicalAve;
   }
 
   @Override
