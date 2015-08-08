@@ -80,13 +80,17 @@ public class ValueFactory {
           Sensor s = client.getSensor(sensorId);
           ret.setNumSensors(ret.getNumSensors() + 1);
           CurrentPower power = getCurrentPower(depository, s);
+          XMLGregorianCalendar now = Tstamp.makeTimestamp();
           if (power != null) {
-            ret.setNumSensorsReporting(ret.getNumSensorsReporting() + 1);
-            ret.setHistoricalMin(ret.getHistoricalMin() + power.getHistoricalMin());
-            ret.setHistoricalMax(ret.getHistoricalMax() + power.getHistoricalMax());
-            ret.setHistoricalAve(ret.getHistoricalAve() + power.getHistoricalAve());
-            ret.setCurrentValue(ret.getCurrentValue() + power.getCurrentValue());
-            ret.setTimestamp(power.getTimestamp());
+            long deltaT = Tstamp.diff(now, power.getTimestamp());
+            if (Math.abs(deltaT) < 300000) {
+              ret.setNumSensorsReporting(ret.getNumSensorsReporting() + 1);
+              ret.setHistoricalMin(ret.getHistoricalMin() + power.getHistoricalMin());
+              ret.setHistoricalMax(ret.getHistoricalMax() + power.getHistoricalMax());
+              ret.setHistoricalAve(ret.getHistoricalAve() + power.getHistoricalAve());
+              ret.setCurrentValue(ret.getCurrentValue() + power.getCurrentValue());
+              ret.setTimestamp(power.getTimestamp());
+            }
           }
         }
         catch (IdNotFoundException e) {
@@ -97,6 +101,7 @@ public class ValueFactory {
         }
         catch (ResourceException re) {
           System.out.println(sensorId + " not reporting.");
+//          re.printStackTrace();
         }
       }
       return ret;
