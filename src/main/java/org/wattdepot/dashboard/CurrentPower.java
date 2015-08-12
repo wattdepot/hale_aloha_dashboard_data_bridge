@@ -10,10 +10,10 @@ import javax.xml.datatype.XMLGregorianCalendar;
 public class CurrentPower {
   private Sensor sensor;
   private XMLGregorianCalendar timestamp;
+  private double historicalAve;
   private double historicalMin;
   private double historicalMax;
   private double currentValue;
-  private double historicalAve;
 
   public double getHistoricalAve() {
     return historicalAve;
