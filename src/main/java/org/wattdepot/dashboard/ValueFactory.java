@@ -1,22 +1,28 @@
 package org.wattdepot.dashboard;
 
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBCollection;
 import org.restlet.resource.ResourceException;
 import org.wattdepot.client.http.api.WattDepotClient;
 import org.wattdepot.common.domainmodel.Depository;
 import org.wattdepot.common.domainmodel.InterpolatedValue;
 import org.wattdepot.common.domainmodel.InterpolatedValueList;
+import org.wattdepot.common.domainmodel.MeasurementList;
 import org.wattdepot.common.domainmodel.Sensor;
 import org.wattdepot.common.domainmodel.SensorGroup;
 import org.wattdepot.common.domainmodel.SensorGroupList;
 import org.wattdepot.common.domainmodel.SensorList;
+import org.wattdepot.common.domainmodel.SensorStatusList;
 import org.wattdepot.common.exception.BadCredentialException;
 import org.wattdepot.common.exception.IdNotFoundException;
 import org.wattdepot.common.exception.NoMeasurementException;
 import org.wattdepot.common.util.DateConvert;
 import org.wattdepot.common.util.tstamp.Tstamp;
 
+import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.XMLGregorianCalendar;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -67,6 +73,9 @@ public class ValueFactory {
   private Map<String, Sensor> sensorMap;
   private Map<String, SensorGroup> sensorGroupMap;
   private ArrayList<SensorGroup> towerList;
+  private Map<SensorGroup, InterpolatedValueList> last24HoursEnergy;
+  private Map<SensorGroup, InterpolatedValueList> dailyEnergy;
+  private Map<SensorGroup, SensorStatusList> sensorStatus;
   private Depository power;
   private Depository energy;
 
@@ -82,6 +91,10 @@ public class ValueFactory {
       this.sensorMap = new HashMap<String, Sensor>();
       this.sensorGroupMap = new HashMap<String, SensorGroup>();
       this.towerList = new ArrayList<SensorGroup>();
+      this.last24HoursEnergy = new HashMap<SensorGroup, InterpolatedValueList>();
+      this.dailyEnergy = new HashMap<SensorGroup, InterpolatedValueList>();
+      this.sensorStatus = new HashMap<SensorGroup, SensorStatusList>();
+
       SensorList sensorList = client.getSensors();
       for (Sensor s : sensorList.getSensors()) {
         sensorMap.put(s.getId(), s);
@@ -104,6 +117,121 @@ public class ValueFactory {
     }
   }
 
+  public void updateHourlyEnergy() {
+    XMLGregorianCalendar now = Tstamp.makeTimestamp();
+    XMLGregorianCalendar oneDayAgo = Tstamp.incrementDays(now, -1);
+    for (SensorGroup g : towerList) {
+      InterpolatedValueList hourlyData = this.client.getHourlyValues(this.energy, g, DateConvert.convertXMLCal(oneDayAgo), DateConvert.convertXMLCal(now), false);
+      last24HoursEnergy.put(g, hourlyData);
+    }
+  }
+
+  public void updateDailyEnergy() {
+    XMLGregorianCalendar now = Tstamp.makeTimestamp();
+    XMLGregorianCalendar thirtyDaysAgo = Tstamp.incrementDays(now, -30);
+    for (SensorGroup group : towerList) {
+      InterpolatedValueList dailyData = this.client.getDailyValues(this.energy, group, DateConvert.convertXMLCal(thirtyDaysAgo), DateConvert.convertXMLCal(now), false);
+      dailyEnergy.put(group, dailyData);
+    }
+  }
+
+  public void updateSensorStatus() {
+    for (SensorGroup group : towerList) {
+      SensorStatusList statusList = client.getSensorStatuses(power, group);
+      sensorStatus.put(group, statusList);
+    }
+  }
+
+  public void updateMongoEnergyLast24Hours(DBCollection db) {
+    for (SensorGroup tower: towerList) {
+      ArrayList<BasicDBObject> hourlyData = getLast24HoursEnergyAsDocs(tower);
+      for (BasicDBObject doc : hourlyData) {
+        db.insert(doc);
+      }
+    }
+  }
+
+  public void updateMongoEnergyDailyData(DBCollection db) {
+    for (SensorGroup tower : towerList) {
+      ArrayList<BasicDBObject> dailyData = getDailyEnergyAsDocs(tower);
+      for (BasicDBObject doc : dailyData) {
+        db.insert(doc);
+      }
+    }
+  }
+
+  public void updateMongoSensorStatus(DBCollection db) {
+    for (SensorGroup tower : towerList) {
+      ArrayList<BasicDBObject> statuses = getSensorStatusAsDocs(tower);
+      for (BasicDBObject doc : statuses) {
+        db.insert(doc);
+      }
+    }
+  }
+
+  private InterpolatedValueList getLast24HoursEnergy(SensorGroup group) {
+    return last24HoursEnergy.get(group);
+  }
+
+  private ArrayList<BasicDBObject> getLast24HoursEnergyAsDocs(SensorGroup group) {
+    ArrayList<BasicDBObject> ret = new ArrayList<BasicDBObject>();
+    InterpolatedValueList list = last24HoursEnergy.get(group);
+    if (list != null) {
+      for (InterpolatedValue value : list.getInterpolatedValues()) {
+        ret.add(buildDBObject(value));
+      }
+    }
+    return ret;
+  }
+
+  private ArrayList<BasicDBObject> getDailyEnergyAsDocs(SensorGroup group) {
+    ArrayList<BasicDBObject> ret = new ArrayList<BasicDBObject>();
+    InterpolatedValueList list = dailyEnergy.get(group);
+    if (list != null) {
+      for (InterpolatedValue value : list.getInterpolatedValues()) {
+        ret.add(buildDBObject(value));
+      }
+    }
+    return ret;
+  }
+
+  private ArrayList<BasicDBObject> getSensorStatusAsDocs(SensorGroup group) {
+    ArrayList<BasicDBObject> ret = new ArrayList<BasicDBObject>();
+    SensorStatusList statuses = sensorStatus.get(group);
+    for (org.wattdepot.common.domainmodel.SensorStatus status : statuses.getStatuses()) {
+      ret.add(buildDBObject(status));
+    }
+    return ret;
+  }
+
+  private BasicDBObject buildDBObject(InterpolatedValue value) {
+    try {
+      BasicDBObject ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(value.getSensorId()))
+          .append("value", value.getValue())
+          .append("date", DateConvert.convertDate(value.getEnd()).toXMLFormat());
+      return ret;
+    }
+    catch (DatatypeConfigurationException e) {
+      e.printStackTrace();
+    }
+    return null;
+  }
+
+  private BasicDBObject buildDBObject(org.wattdepot.common.domainmodel.SensorStatus status) {
+    BasicDBObject ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(status.getSensorId()))
+        .append("status", status.getStatus().getLabel())
+        .append("sensorId", status.getSensorId())
+        .append("date", status.getTimestamp().toXMLFormat());
+    return ret;
+  }
+
+  public ArrayList<SensorGroup> getTowerList() {
+    ArrayList<SensorGroup> ret = new ArrayList<>();
+    for (SensorGroup g : towerList) {
+      ret.add(g);
+    }
+    return ret;
+  }
 
   public TowerCurrentPower getCurrentPower(SensorGroup towerGroup) {
     TowerCurrentPower ret = new TowerCurrentPower();
@@ -143,6 +271,18 @@ public class ValueFactory {
     for (String s : sensorMap.keySet()) {
       updateCurrentPower(s);
     }
+  }
+
+  public void foo() {
+    for (SensorGroup tower: towerList) {
+      SensorStatusList list = client.getSensorStatuses(power, tower);
+      for (org.wattdepot.common.domainmodel.SensorStatus status : list.getStatuses()) {
+        System.out.println(buildDBObject(status));
+      }
+    }
+
+//    System.out.println(towerList);
+//    System.out.println(client.getLatestValue(power, towerList.get(1)));
   }
 
   public void updateCurrentPower(String sensorId) {

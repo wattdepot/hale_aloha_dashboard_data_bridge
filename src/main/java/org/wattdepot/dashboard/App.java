@@ -14,6 +14,8 @@ import com.mongodb.ServerAddress;
 import org.wattdepot.client.http.api.WattDepotClient;
 import org.wattdepot.common.domainmodel.Depository;
 import org.wattdepot.common.domainmodel.DepositoryList;
+import org.wattdepot.common.domainmodel.InterpolatedValue;
+import org.wattdepot.common.domainmodel.InterpolatedValueList;
 import org.wattdepot.common.domainmodel.Sensor;
 import org.wattdepot.common.domainmodel.SensorGroup;
 import org.wattdepot.common.domainmodel.SensorGroupList;
@@ -23,6 +25,7 @@ import org.wattdepot.common.exception.IdNotFoundException;
 import org.wattdepot.common.exception.NoMeasurementException;
 import org.wattdepot.common.util.DateConvert;
 
+import javax.xml.datatype.DatatypeConfigurationException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Date;
@@ -43,16 +46,19 @@ public class App {
 
 
       DBCollection powerCollection = db.getCollection("power");
+
+      DBCollection hourlyCollection = db.getCollection("hourly");
+      DBCollection dailyCollection = db.getCollection("daily");
+      DBCollection statusCollection = db.getCollection("status");
+
       ValueFactory factory = ValueFactory.getInstance();
-
-      factory.updateCurrentPower();
-
-      CurrentPower power = factory.getCurrentPower("mokihana-4th-telco");
-      System.out.println(factory.getCurrentStatus("mokihana-4th-telco"));
-      System.out.println(power);
-      power = factory.getCurrentPower("lehua-4th-telco");
-      System.out.println(factory.getCurrentStatus("lehua-4th-telco"));
-      System.out.println(power);
+//      factory.updateHourlyEnergy();
+//      factory.updateMongoEnergyLast24Hours(hourlyCollection);
+//      factory.updateDailyEnergy();
+//      factory.updateMongoEnergyDailyData(dailyCollection);
+      factory.updateSensorStatus();
+      factory.updateMongoSensorStatus(statusCollection);
+//      factory.foo();
     }
     catch (UnknownHostException e) {
       e.printStackTrace();
