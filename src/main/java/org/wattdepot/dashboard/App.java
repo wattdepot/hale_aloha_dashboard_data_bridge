@@ -38,30 +38,12 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * Hello world!
  */
 public class App {
-  public static void main(String[] args) {
-
-    try {
-      MongoClient mongoClient = new MongoClient("localhost", 27017);
-      DB db = mongoClient.getDB("hale_aloha");
-
-
-      DBCollection powerCollection = db.getCollection("power");
-
-      DBCollection hourlyCollection = db.getCollection("hourly");
-      DBCollection dailyCollection = db.getCollection("daily");
-      DBCollection statusCollection = db.getCollection("status");
-
-      ValueFactory factory = ValueFactory.getInstance();
-      factory.updateHourlyEnergy();
-      factory.updateMongoEnergyLast24Hours(hourlyCollection);
-      factory.updateDailyEnergy();
-      factory.updateMongoEnergyDailyData(dailyCollection);
-      factory.updateSensorStatus();
-      factory.updateMongoSensorStatus(statusCollection);
-//      factory.foo();
-    }
-    catch (UnknownHostException e) {
-      e.printStackTrace();
-    }
+  public static void main(String[] args) throws InterruptedException {
+    DataBridge bridge = DataBridge.getInstance();
+    System.out.println("Added " + bridge.updateHourlyEnergy() + " hourly entries");
+    System.out.println("Added " + bridge.updateDailyEnergy() + " daily entries");
+    Thread.sleep(10000);
+    System.out.println("Added " + bridge.updateHourlyEnergy() + " hourly entries");
+    System.out.println("Added " + bridge.updateDailyEnergy() + " daily entries");
   }
 }
