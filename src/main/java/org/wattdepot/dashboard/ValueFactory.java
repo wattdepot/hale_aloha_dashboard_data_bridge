@@ -226,7 +226,7 @@ public class ValueFactory {
   }
 
   public ArrayList<SensorGroup> getTowerList() {
-    ArrayList<SensorGroup> ret = new ArrayList<>();
+    ArrayList<SensorGroup> ret = new ArrayList<SensorGroup>();
     for (SensorGroup g : towerList) {
       ret.add(g);
     }
