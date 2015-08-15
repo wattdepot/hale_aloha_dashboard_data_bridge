@@ -52,10 +52,10 @@ public class App {
       DBCollection statusCollection = db.getCollection("status");
 
       ValueFactory factory = ValueFactory.getInstance();
-//      factory.updateHourlyEnergy();
-//      factory.updateMongoEnergyLast24Hours(hourlyCollection);
-//      factory.updateDailyEnergy();
-//      factory.updateMongoEnergyDailyData(dailyCollection);
+      factory.updateHourlyEnergy();
+      factory.updateMongoEnergyLast24Hours(hourlyCollection);
+      factory.updateDailyEnergy();
+      factory.updateMongoEnergyDailyData(dailyCollection);
       factory.updateSensorStatus();
       factory.updateMongoSensorStatus(statusCollection);
 //      factory.foo();
