@@ -6,6 +6,7 @@ import com.mongodb.DBCollection;
 import com.mongodb.MongoClient;
 import org.wattdepot.client.http.api.WattDepotClient;
 import org.wattdepot.common.domainmodel.Depository;
+import org.wattdepot.common.domainmodel.HistoricalValues;
 import org.wattdepot.common.domainmodel.InterpolatedValue;
 import org.wattdepot.common.domainmodel.InterpolatedValueList;
 import org.wattdepot.common.domainmodel.SensorGroup;
@@ -19,6 +20,7 @@ import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.XMLGregorianCalendar;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -122,18 +124,6 @@ public class DataBridge {
    */
   private ArrayList<SensorGroup> towerList;
   /**
-   * cache of the hourly energy data for each tower.
-   */
-  private Map<SensorGroup, InterpolatedValueList> last24HoursEnergy;
-  /**
-   * cache of the daily energy data for each tower.
-   */
-  private Map<SensorGroup, InterpolatedValueList> dailyEnergy;
-  /**
-   * cache of the sensor statuses for each tower.
-   */
-  private Map<SensorGroup, SensorStatusList> sensorStatus;
-  /**
    * The timestamp of the last hourly energy update.
    */
   private XMLGregorianCalendar lastHourlyEnergyUpdate;
@@ -145,6 +135,14 @@ public class DataBridge {
    * The timestamp of the last sensor status update.
    */
   private XMLGregorianCalendar lastSensorStatusUpdate;
+  /**
+   * The houly power history for each tower. Should be updated hourly.
+   */
+  private Map<SensorGroup, HistoricalValues> powerHistory;
+  /**
+   * The daily energy history for each tower. Should be updated daily.
+   */
+  private Map<SensorGroup, HistoricalValues> energyHistory;
 
   /**
    * Creates a new DataBridge initializing the MongoDB and WattDepot clients.
@@ -163,15 +161,14 @@ public class DataBridge {
     this.powerDepository = client.getDepository(POWER);
     this.energyDepository = client.getDepository(ENERGY);
     this.towerList = new ArrayList<SensorGroup>();
-    this.last24HoursEnergy = new HashMap<SensorGroup, InterpolatedValueList>();
-    this.dailyEnergy = new HashMap<SensorGroup, InterpolatedValueList>();
-    this.sensorStatus = new HashMap<SensorGroup, SensorStatusList>();
     // Initialize the tower list. We only need to do this once.
     for (SensorGroup g : client.getSensorGroups().getGroups()) {
       if (g.getId().endsWith("-total")) {
         towerList.add(g);
       }
     }
+    this.powerHistory = new HashMap<SensorGroup, HistoricalValues>();
+    this.energyHistory = new HashMap<SensorGroup, HistoricalValues>();
   }
 
   /**
@@ -223,6 +220,11 @@ public class DataBridge {
     return ret;
   }
 
+  /**
+   * Updates the daily energy and history for each tower.
+   *
+   * @return The number of entries sent to the Hale Aloha Dashboard.
+   */
   public Integer updateDailyEnergy() {
     Integer ret = 0;
     XMLGregorianCalendar now = Tstamp.makeTimestamp();
@@ -241,17 +243,82 @@ public class DataBridge {
       for (BasicDBObject doc : objects) {
         this.dailyCollection.insert(doc);
       }
+      HistoricalValues historicalValues = this.client.getHistoricalValues(energyDepository, group, new Date(), true, 5, false);
+      energyHistory.put(group, historicalValues);
     }
     lastDailyEnergyUpdate = now;
     return ret;
   }
 
+  /**
+   * Updates the Hale Aloha Sensor Status.
+   *
+   * @return The number statues sent to the dashboard.
+   */
+  public Integer updateSensorStatus() {
+    Integer ret = 0;
+    for (SensorGroup group : towerList) {
+      SensorStatusList statusList = client.getSensorStatuses(powerDepository, group);
+      ArrayList<BasicDBObject> objects = buildDBFromSensorStatusList(statusList);
+      ret += objects.size();
+      for (BasicDBObject doc : objects) {
+        statusCollection.insert(doc);
+      }
+    }
+    return ret;
+  }
+
+  /**
+   * Updates the Hale Aloha current power.
+   *
+   * @return The number of power updates sent to the dashboard.
+   */
+  public Integer updateCurrentPower() {
+    Integer ret = 0;
+    for (SensorGroup group : towerList) {
+      InterpolatedValue value = client.getLatestValue(powerDepository, group);
+      BasicDBObject doc = buildPowerDBObject(value);
+      System.out.println(doc);
+      BasicDBObject remove = new BasicDBObject("tower", IdHelper.niceifyTowerId(group.getId()));
+      powerCollection.remove(remove);
+      powerCollection.insert(doc);
+      ret++;
+    }
+    return ret;
+  }
+
+  /**
+   * Updates the hourly power history for each tower. Should be run once an hour.
+   */
+  public void updatePowerHistory() {
+    for (SensorGroup tower : towerList) {
+      HistoricalValues values = client.getHistoricalValues(powerDepository, tower, new Date(), false, 5, true);
+      powerHistory.put(tower, values);
+    }
+  }
+
+  /**
+   * Gets the daily energy data.
+   *
+   * @param group the group to get the data for.
+   * @param start The beginning datetime.
+   * @param end   The ending datetime.
+   * @return An InterpolatedValueList of the daily energy data.
+   */
   private InterpolatedValueList getDailyEnergyData(SensorGroup group, XMLGregorianCalendar start, XMLGregorianCalendar end) {
     InterpolatedValueList dailyData = this.client.getDailyValues(this.energyDepository, group,
         DateConvert.convertXMLCal(start), DateConvert.convertXMLCal(end), false);
     return dailyData;
   }
 
+  /**
+   * Gets the hourly energy data.
+   *
+   * @param group the group to get the data for.
+   * @param start The beginning datetime.
+   * @param end   The ending datetime.
+   * @return An InterpolatedValueList of the hourly energy data.
+   */
   private InterpolatedValueList getHourlyEnergyData(SensorGroup group, XMLGregorianCalendar start,
                                                     XMLGregorianCalendar end) {
     InterpolatedValueList hourlyData = this.client.getHourlyValues(this.energyDepository, group,
@@ -259,6 +326,12 @@ public class DataBridge {
     return hourlyData;
   }
 
+  /**
+   * Builds BasicDBObjects representing the InterpolatedValues.
+   *
+   * @param list the list of InterpolatedValues.
+   * @return the list of BasicDBObjects.
+   */
   private ArrayList<BasicDBObject> buildDBFromInterpolatedValues(InterpolatedValueList list) {
     ArrayList<BasicDBObject> ret = new ArrayList<BasicDBObject>();
     assert (list != null);
@@ -268,25 +341,109 @@ public class DataBridge {
     return ret;
   }
 
-  private BasicDBObject buildDBObject(InterpolatedValue value) {
-    try {
-      BasicDBObject ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(value.getSensorId()))
-          .append("value", value.getValue())
-          .append("date", DateConvert.convertDate(value.getEnd()).toXMLFormat());
-      return ret;
+  /**
+   * Builds BasicDBObjects representing the SensorStatuses.
+   *
+   * @param list the list of SensorStatuses.
+   * @return the list of BasicDBObjects.
+   */
+  private ArrayList<BasicDBObject> buildDBFromSensorStatusList(SensorStatusList list) {
+    ArrayList<BasicDBObject> ret = new ArrayList<BasicDBObject>();
+    assert (list != null);
+    for (org.wattdepot.common.domainmodel.SensorStatus status : list.getStatuses()) {
+      ret.add(buildDBObject(status));
     }
-    catch (DatatypeConfigurationException e) {
-      e.printStackTrace();
-    }
-    return null;
+    return ret;
   }
 
+  /**
+   * Builds a BasicDBObject from the InterpolatedValue.
+   *
+   * @param value the InterpolatedValue.
+   * @return the BasicDBObject.
+   */
+  private BasicDBObject buildDBObject(InterpolatedValue value) {
+    BasicDBObject ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(value.getSensorId()))
+        .append("value", value.getValue())
+        .append("date", value.getEnd())
+        .append("createdAt", new Date());
+    return ret;
+  }
+
+  /**
+   * Builds a BasicDBObject from the SensorStatus.
+   *
+   * @param status the SensorStatus.
+   * @return the BasicDBObject.
+   */
   private BasicDBObject buildDBObject(org.wattdepot.common.domainmodel.SensorStatus status) {
     BasicDBObject ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(status.getSensorId()))
         .append("status", status.getStatus().getLabel())
         .append("sensorId", status.getSensorId())
-        .append("date", status.getTimestamp().toXMLFormat());
+        .append("date", status.getTimestamp().toXMLFormat())
+        .append("createdAt", new Date());
     return ret;
   }
 
+  private BasicDBObject buildPowerDBObject(InterpolatedValue value) {
+    SensorGroup group = null;
+    for (SensorGroup g : towerList) {
+      if (g.getId().equals(value.getSensorId())) {
+        group = g;
+      }
+    }
+    BasicDBObject ret = null;
+    HistoricalValues val = powerHistory.get(group);
+    if (val != null) {
+      Double min = val.getMinimum();
+      if (min.isNaN()) {
+        min = value.getValue() / 2;
+      }
+      Double max = val.getMaximum();
+      if (max.isNaN()) {
+        max = value.getValue() * 1.5;
+      }
+      Double ave = val.getAverage();
+      if (ave.isNaN()) {
+        ave = value.getValue();
+      }
+      ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(value.getSensorId()))
+          .append("value", value.getValue())
+          .append("minimum", min)
+          .append("maximum", max)
+          .append("average", ave)
+          .append("meters", 10)
+          .append("reporting", 10 - value.getMissingSensors().size())
+          .append("timestamp", value.getEnd())
+          .append("createdAt", new Date());
+    }
+    else {
+      ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(value.getSensorId()))
+          .append("value", value.getValue())
+          .append("minimum", 0.0)
+          .append("maximum", 15000.0)
+          .append("average", 7500.0)
+          .append("meters", 10)
+          .append("reporting", 10 - value.getMissingSensors().size())
+          .append("timestamp", value.getEnd())
+          .append("createdAt", new Date());
+    }
+    return ret;
+  }
+
+  private XMLGregorianCalendar beginningOfHour(XMLGregorianCalendar when) {
+    XMLGregorianCalendar begin = Tstamp.makeTimestamp(when.toGregorianCalendar().getTimeInMillis());
+    begin.setMinute(0);
+    begin.setSecond(0);
+    begin.setMillisecond(0);
+    return begin;
+  }
+
+  private XMLGregorianCalendar endingOfHour(XMLGregorianCalendar when) {
+    XMLGregorianCalendar end = Tstamp.incrementHours(when, 1);
+    end.setMinute(0);
+    end.setSecond(0);
+    end.setMillisecond(0);
+    return end;
+  }
 }

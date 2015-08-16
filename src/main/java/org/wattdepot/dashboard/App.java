@@ -31,19 +31,26 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
+import java.util.Timer;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
- * Hello world!
+ * Runs the data bridge between WattDepot and the Hale Aloha Dashboard.
  */
 public class App {
-  public static void main(String[] args) throws InterruptedException {
+  /**
+   * Main method.
+   * @param args command line arguments, ignored.
+   */
+  public static void main(String[] args)  {
+    // ensure there is history.
     DataBridge bridge = DataBridge.getInstance();
-    System.out.println("Added " + bridge.updateHourlyEnergy() + " hourly entries");
-    System.out.println("Added " + bridge.updateDailyEnergy() + " daily entries");
-    Thread.sleep(10000);
-    System.out.println("Added " + bridge.updateHourlyEnergy() + " hourly entries");
-    System.out.println("Added " + bridge.updateDailyEnergy() + " daily entries");
+    bridge.updatePowerHistory();
+    bridge.updateHourlyEnergy();
+    Timer timer = new Timer();
+    timer.schedule(new CurrentPowerTask(), 100, 15000);
+    timer.schedule(new HourlyEnergyTask(), 500, 60 * 60 * 1000);
+    timer.schedule(new DailyEnergyTask(), 1500, 24 * 60 * 60 * 1000);
   }
 }
