@@ -412,8 +412,8 @@ public class DataBridge {
           .append("minimum", min)
           .append("maximum", max)
           .append("average", ave)
-          .append("meters", 10)
-          .append("reporting", 10 - value.getMissingSensors().size())
+          .append("meters", value.getDefinedSensors().size())
+          .append("reporting", value.getReportingSensors().size())
           .append("timestamp", value.getEnd())
           .append("createdAt", new Date());
     }
@@ -423,8 +423,8 @@ public class DataBridge {
           .append("minimum", 0.0)
           .append("maximum", 15000.0)
           .append("average", 7500.0)
-          .append("meters", 10)
-          .append("reporting", 10 - value.getMissingSensors().size())
+          .append("meters", value.getDefinedSensors().size())
+          .append("reporting", value.getReportingSensors().size())
           .append("timestamp", value.getEnd())
           .append("createdAt", new Date());
     }
