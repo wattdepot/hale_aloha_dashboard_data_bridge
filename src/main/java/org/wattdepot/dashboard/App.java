@@ -29,9 +29,14 @@ import javax.xml.datatype.DatatypeConfigurationException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Set;
 import java.util.Timer;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogManager;
+import java.util.logging.Logger;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -46,11 +51,12 @@ public class App {
   public static void main(String[] args)  {
     // ensure there is history.
     DataBridge bridge = DataBridge.getInstance();
-    bridge.updatePowerHistory();
+//    bridge.updatePowerHistory();
     bridge.updateHourlyEnergy();
-    Timer timer = new Timer();
-    timer.schedule(new CurrentPowerTask(), 100, 15000);
-    timer.schedule(new HourlyEnergyTask(), 500, 60 * 60 * 1000);
-    timer.schedule(new DailyEnergyTask(), 1500, 24 * 60 * 60 * 1000);
+//    Timer timer = new Timer();
+//    timer.schedule(new CurrentPowerTask(), 100, 15000);
+//    timer.schedule(new HourlyEnergyTask(), 500, 60 * 60 * 1000);
+//    timer.schedule(new SensorStatusTask(), 750, 60 * 60 * 1000);
+//    timer.schedule(new DailyEnergyTask(), 1500, 24 * 60 * 60 * 1000);
   }
 }
