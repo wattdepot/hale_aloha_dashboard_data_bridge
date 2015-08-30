@@ -53,6 +53,7 @@ public class App {
     DataBridge bridge = DataBridge.getInstance();
 //    bridge.updatePowerHistory();
     bridge.updateHourlyEnergy();
+//    bridge.updateDailyEnergy();
 //    Timer timer = new Timer();
 //    timer.schedule(new CurrentPowerTask(), 100, 15000);
 //    timer.schedule(new HourlyEnergyTask(), 500, 60 * 60 * 1000);

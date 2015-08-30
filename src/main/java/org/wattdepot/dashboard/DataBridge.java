@@ -19,9 +19,11 @@ import org.wattdepot.common.util.tstamp.Tstamp;
 
 import javax.xml.datatype.XMLGregorianCalendar;
 import java.net.UnknownHostException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -109,7 +111,7 @@ public class DataBridge {
   /**
    * The predicted daily energy collection.
    */
-  private DBCollection predicteDailyCollection;
+  private DBCollection predictedDailyCollection;
   /**
    * The sensor status collection.
    */
@@ -173,7 +175,7 @@ public class DataBridge {
     this.dailyCollection = db.getCollection(DAILY);
     this.statusCollection = db.getCollection(STATUS);
     this.predictedHourlyCollection = db.getCollection(PREDICTED_HOURLY);
-    this.predicteDailyCollection = db.getCollection(PREDICTED_DAILY);
+    this.predictedDailyCollection = db.getCollection(PREDICTED_DAILY);
     this.client = new WattDepotClient(SERVER_URL, CLIENT_NAME, CLIENT_ORG, CLIENT_PASSWORD);
     this.powerDepository = client.getDepository(POWER);
     this.energyDepository = client.getDepository(ENERGY);
@@ -252,6 +254,30 @@ public class DataBridge {
       }
       DescriptiveStats historicalValues = this.client.getDescriptiveStats(energyDepository, group, new Date(), true, 5, false);
       energyHistory.put(group, historicalValues);
+
+      if (lastDailyEnergyUpdate == null) { // have not run before
+        // get next 7 days prediction (historical)
+        XMLGregorianCalendar nextSeven = Tstamp.incrementDays(now, 7);
+        List<XMLGregorianCalendar> times = Tstamp.getTimestampList(now, nextSeven, 24 * 60);
+        if (times != null) {
+          for (XMLGregorianCalendar time : times) {
+            data = getHistoricalDailyEnergyData(group, time, 7);
+            BasicDBObject histObj = buildDailyHistoryDBObject(data);
+            this.predictedDailyCollection.insert(histObj);
+          }
+        }
+      }
+      else if (Tstamp.diff(lastDailyEnergyUpdate, now) > 24 * 60 * 60 * 1000) {
+        List<XMLGregorianCalendar> times = Tstamp.getTimestampList(lastHourlyEnergyUpdate, now, 24 * 60);
+        if (times != null) {
+          for (XMLGregorianCalendar time : times) {
+            data = getHistoricalHourlyEnergyData(group, time, 7);
+            BasicDBObject histObj = buildDailyHistoryDBObject(data);
+            this.predictedHourlyCollection.insert(histObj);
+          }
+        }
+      }
+
     }
     lastDailyEnergyUpdate = now;
     return ret;
@@ -280,10 +306,28 @@ public class DataBridge {
       for (BasicDBObject doc : objects) {
         this.hourlyCollection.insert(doc);
       }
-
-      data = getHistoricalHourlyEnergyData(group, now, 7);
-      BasicDBObject histObj = buildHistoryDBObject(data);
-      this.predictedHourlyCollection.insert(histObj);
+      if (lastHourlyEnergyUpdate == null) { // have not run before
+        // get 24 hours historical data
+        XMLGregorianCalendar nextDay = Tstamp.incrementDays(now, 1);
+        List<XMLGregorianCalendar> times = Tstamp.getTimestampList(now, nextDay, 60);
+        if (times != null) {
+          for (XMLGregorianCalendar time : times) {
+            data = getHistoricalHourlyEnergyData(group, time, 7);
+            BasicDBObject histObj = buildHourlyHistoryDBObject(data);
+            this.predictedHourlyCollection.insert(histObj);
+          }
+        }
+      }
+      else if (Tstamp.diff(lastHourlyEnergyUpdate, now) > 60 * 60 * 1000) {
+        List<XMLGregorianCalendar> times = Tstamp.getTimestampList(lastHourlyEnergyUpdate, now, 60);
+        if (times != null) {
+          for (XMLGregorianCalendar time : times) {
+            data = getHistoricalHourlyEnergyData(group, time, 7);
+            BasicDBObject histObj = buildDailyHistoryDBObject(data);
+            this.predictedHourlyCollection.insert(histObj);
+          }
+        }
+      }
     }
     lastHourlyEnergyUpdate = now;
     return ret;
@@ -384,14 +428,39 @@ public class DataBridge {
     return ret;
   }
 
-  private BasicDBObject buildHistoryDBObject(InterpolatedValueList interpolatedValueList) {
+  private BasicDBObject buildDailyHistoryDBObject(InterpolatedValueList interpolatedValueList) {
     if (interpolatedValueList.getInterpolatedValues().size() > 0) {
+      SimpleDateFormat format = new SimpleDateFormat("MM/dd");
       InterpolatedValue first = interpolatedValueList.getInterpolatedValues().get(0);
+      XMLGregorianCalendar time = Tstamp.makeTimestamp(first.getStart().getTime());
+      time = Tstamp.incrementDays(time, 7);
       BasicDBObject ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(first.getSensorId()))
+          .append("date", first.getStart())
+          .append("label", format.format(DateConvert.convertXMLCal(time)))
           .append("createdAt", new Date());
       BasicDBList values = new BasicDBList();
       for (InterpolatedValue v : interpolatedValueList.getInterpolatedValues()) {
-        values.add(v.getValue());
+        values.add(v.getValue() / 1000.0); // put into kW instead of W.
+      }
+      ret.append("values", values);
+      return ret;
+    }
+    return null;
+  }
+
+  private BasicDBObject buildHourlyHistoryDBObject(InterpolatedValueList interpolatedValueList) {
+    if (interpolatedValueList.getInterpolatedValues().size() > 0) {
+      SimpleDateFormat format = new SimpleDateFormat("hha");
+      InterpolatedValue first = interpolatedValueList.getInterpolatedValues().get(0);
+      XMLGregorianCalendar time = Tstamp.makeTimestamp(first.getStart().getTime());
+      time = Tstamp.incrementDays(time, 7);
+      BasicDBObject ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(first.getSensorId()))
+          .append("date", first.getStart())
+          .append("label", format.format(DateConvert.convertXMLCal(time)))
+          .append("createdAt", new Date());
+      BasicDBList values = new BasicDBList();
+      for (InterpolatedValue v : interpolatedValueList.getInterpolatedValues()) {
+        values.add(v.getValue() / 1000.0); // put into kW instead of W.
       }
       ret.append("values", values);
       return ret;
@@ -495,7 +564,6 @@ public class DataBridge {
     return hourlyData;
   }
 
-
   /**
    * Gets the daily historical data.
    *
@@ -505,7 +573,7 @@ public class DataBridge {
    * @return An InterpolatedValueList of the historical data.
    */
   private InterpolatedValueList getHistoricalDailyEnergyData(SensorGroup group, XMLGregorianCalendar time, Integer numSamples) {
-    InterpolatedValueList hourlyData = this.client.getHistoricalValues(this.energyDepository, group, DateConvert.convertXMLCal(time), true, numSamples, false);
-    return hourlyData;
+    InterpolatedValueList dailyData = this.client.getHistoricalValues(this.energyDepository, group, DateConvert.convertXMLCal(time), true, numSamples, false);
+    return dailyData;
   }
 }
