@@ -5,6 +5,7 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.MongoClient;
+import com.mongodb.WriteResult;
 import org.wattdepot.client.http.api.WattDepotClient;
 import org.wattdepot.common.domainmodel.Depository;
 import org.wattdepot.common.domainmodel.DescriptiveStats;
@@ -15,6 +16,7 @@ import org.wattdepot.common.domainmodel.SensorStatusList;
 import org.wattdepot.common.exception.BadCredentialException;
 import org.wattdepot.common.exception.IdNotFoundException;
 import org.wattdepot.common.util.DateConvert;
+import org.wattdepot.common.util.logger.LoggerUtil;
 import org.wattdepot.common.util.tstamp.Tstamp;
 
 import javax.xml.datatype.XMLGregorianCalendar;
@@ -25,6 +27,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * DataBridge - The bridge between WattDepot and the Hale Aloha Dashboard App.
@@ -235,6 +239,10 @@ public class DataBridge {
    * @return The number of entries sent to the Hale Aloha Dashboard.
    */
   public Integer updateDailyEnergy() {
+//    System.out.println("updateDailyEnergy");
+    if (lastDailyEnergyUpdate == null) {
+      clearDailyEnergy(); // want to delete any duplicates.
+    }
     Integer ret = 0;
     XMLGregorianCalendar now = Tstamp.makeTimestamp();
     for (SensorGroup group : towerList) {
@@ -254,7 +262,6 @@ public class DataBridge {
       }
       DescriptiveStats historicalValues = this.client.getDescriptiveStats(energyDepository, group, new Date(), true, 5, false);
       energyHistory.put(group, historicalValues);
-
       if (lastDailyEnergyUpdate == null) { // have not run before
         // get next 7 days prediction (historical)
         XMLGregorianCalendar nextSeven = Tstamp.incrementDays(now, 7);
@@ -277,10 +284,27 @@ public class DataBridge {
           }
         }
       }
-
     }
     lastDailyEnergyUpdate = now;
     return ret;
+  }
+
+  /**
+   * Removes all the daily energy data from the database.
+   * @return The number of entries removed.
+   */
+  public Integer clearDailyEnergy() {
+//    System.out.println("clearDailyEnergy");
+    Integer integer = null;
+    for (SensorGroup group : towerList) {
+      BasicDBObject remove = new BasicDBObject("tower", IdHelper.niceifyTowerId(group.getId()));
+      WriteResult result = this.dailyCollection.remove(remove);
+      if (integer == null) {
+        integer = new Integer(0);
+      }
+      integer += result.getN();
+    }
+    return integer;
   }
 
   /**
@@ -290,6 +314,9 @@ public class DataBridge {
    */
   public Integer updateHourlyEnergy() {
     Integer ret = 0;
+    if (lastHourlyEnergyUpdate == null) {
+      clearHourlyEnergy();
+    }
     XMLGregorianCalendar now = Tstamp.makeTimestamp();
     for (SensorGroup group : towerList) {
       InterpolatedValueList data = null;
@@ -331,6 +358,24 @@ public class DataBridge {
     }
     lastHourlyEnergyUpdate = now;
     return ret;
+  }
+
+  /**
+   * Removes all the hourly energy data from the database.
+   * @return The number of entries removed.
+   */
+  public Integer clearHourlyEnergy() {
+//    System.out.println("clearDailyEnergy");
+    Integer integer = null;
+    for (SensorGroup group : towerList) {
+      BasicDBObject remove = new BasicDBObject("tower", IdHelper.niceifyTowerId(group.getId()));
+      WriteResult result = this.hourlyCollection.remove(remove);
+      if (integer == null) {
+        integer = new Integer(0);
+      }
+      integer += result.getN();
+    }
+    return integer;
   }
 
   /**
