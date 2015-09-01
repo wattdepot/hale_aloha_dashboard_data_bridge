@@ -384,6 +384,8 @@ public class DataBridge {
   public void updatePowerHistory() {
     for (SensorGroup tower : towerList) {
       DescriptiveStats values = client.getDescriptiveStats(powerDepository, tower, new Date(), false, 5, true);
+      BasicDBObject remove = new BasicDBObject("tower", IdHelper.niceifyTowerId(tower.getId()));
+      powerHistory.remove(remove);
       powerHistory.put(tower, values);
     }
   }
@@ -520,6 +522,7 @@ public class DataBridge {
         group = g;
       }
     }
+    Double currentPower = value.getValue();
     BasicDBObject ret = null;
     DescriptiveStats val = powerHistory.get(group);
     if (val != null) {
@@ -527,16 +530,22 @@ public class DataBridge {
       if (min.isNaN()) {
         min = value.getValue() / 2;
       }
+      if (min > currentPower) {
+        min = currentPower - 0.1 * currentPower;
+      }
       Double max = val.getMaximum();
       if (max.isNaN()) {
         max = value.getValue() * 1.5;
       }
+      if (max < currentPower) {
+        max = currentPower + 0.1 * currentPower;
+      }
       Double ave = val.getAverage();
       if (ave.isNaN()) {
-        ave = value.getValue();
+        ave = currentPower;
       }
       ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(value.getSensorId()))
-          .append("value", value.getValue())
+          .append("value", currentPower)
           .append("minimum", min)
           .append("maximum", max)
           .append("average", ave)
@@ -546,10 +555,13 @@ public class DataBridge {
           .append("createdAt", new Date());
     }
     else {
+      currentPower = value.getValue();
+      Double min = currentPower - 0.5 * currentPower;
+      Double max = currentPower + 0.5 * currentPower;
       ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(value.getSensorId()))
-          .append("value", value.getValue())
-          .append("minimum", 0.0)
-          .append("maximum", 15000.0)
+          .append("value", currentPower)
+          .append("minimum", min)
+          .append("maximum", max)
           .append("average", 7500.0)
           .append("meters", value.getDefinedSensors().size())
           .append("reporting", value.getReportingSensors().size())
