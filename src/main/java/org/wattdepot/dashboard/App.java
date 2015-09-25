@@ -51,13 +51,13 @@ public class App {
   public static void main(String[] args)  {
     // ensure there is history.
     DataBridge bridge = DataBridge.getInstance();
-//    bridge.updatePowerHistory();
-//    bridge.updateHourlyEnergy();
+    bridge.updatePowerHistory();
+    bridge.updateHourlyEnergy();
     bridge.updateDailyEnergy();
-//    Timer timer = new Timer();
-//    timer.schedule(new CurrentPowerTask(), 100, 15000);
-//    timer.schedule(new HourlyEnergyTask(), 500, 60 * 60 * 1000);
-//    timer.schedule(new SensorStatusTask(), 750, 60 * 60 * 1000);
-//    timer.schedule(new DailyEnergyTask(), 1500, 24 * 60 * 60 * 1000);
+    Timer timer = new Timer();
+    timer.schedule(new CurrentPowerTask(), 100, 15000);
+    timer.schedule(new HourlyEnergyTask(), 500, 60 * 60 * 1000);
+    timer.schedule(new SensorStatusTask(), 750, 60 * 60 * 1000);
+    timer.schedule(new DailyEnergyTask(), 1500, 24 * 60 * 60 * 1000);
   }
 }

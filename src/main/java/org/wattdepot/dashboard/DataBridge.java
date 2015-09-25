@@ -16,7 +16,6 @@ import org.wattdepot.common.domainmodel.SensorStatusList;
 import org.wattdepot.common.exception.BadCredentialException;
 import org.wattdepot.common.exception.IdNotFoundException;
 import org.wattdepot.common.util.DateConvert;
-import org.wattdepot.common.util.logger.LoggerUtil;
 import org.wattdepot.common.util.tstamp.Tstamp;
 
 import javax.xml.datatype.XMLGregorianCalendar;
@@ -27,8 +26,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * DataBridge - The bridge between WattDepot and the Hale Aloha Dashboard App.
@@ -216,7 +213,7 @@ public class DataBridge {
   }
 
   /**
-   * Updates the Hale Aloha current power.
+   * Updates the Hale Aloha current power. Removes any old power information before inserting the latest value.
    *
    * @return The number of power updates sent to the dashboard.
    */
@@ -350,7 +347,7 @@ public class DataBridge {
         if (times != null) {
           for (XMLGregorianCalendar time : times) {
             data = getHistoricalHourlyEnergyData(group, time, 7);
-            BasicDBObject histObj = buildDailyHistoryDBObject(data);
+            BasicDBObject histObj = buildHourlyHistoryDBObject(data);
             this.predictedHourlyCollection.insert(histObj);
           }
         }
@@ -424,7 +421,7 @@ public class DataBridge {
     ArrayList<BasicDBObject> ret = new ArrayList<BasicDBObject>();
     assert (list != null);
     for (InterpolatedValue value : list.getInterpolatedValues()) {
-      ret.add(buildDBObject(value));
+      ret.add(buildIvDbObject(value));
     }
     return ret;
   }
@@ -439,7 +436,7 @@ public class DataBridge {
     ArrayList<BasicDBObject> ret = new ArrayList<BasicDBObject>();
     assert (list != null);
     for (org.wattdepot.common.domainmodel.SensorStatus status : list.getStatuses()) {
-      ret.add(buildDBObject(status));
+      ret.add(buildStatusDbObject(status));
     }
     return ret;
   }
@@ -450,7 +447,7 @@ public class DataBridge {
    * @param status the SensorStatus.
    * @return the BasicDBObject.
    */
-  private BasicDBObject buildDBObject(org.wattdepot.common.domainmodel.SensorStatus status) {
+  private BasicDBObject buildStatusDbObject(org.wattdepot.common.domainmodel.SensorStatus status) {
     BasicDBObject ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(status.getSensorId()))
         .append("status", status.getStatus().getLabel())
         .append("sensorId", status.getSensorId())
@@ -465,7 +462,7 @@ public class DataBridge {
    * @param value the InterpolatedValue.
    * @return the BasicDBObject.
    */
-  private BasicDBObject buildDBObject(InterpolatedValue value) {
+  private BasicDBObject buildIvDbObject(InterpolatedValue value) {
     BasicDBObject ret = new BasicDBObject("tower", IdHelper.niceifyTowerId(value.getSensorId()))
         .append("value", value.getValue())
         .append("date", value.getEnd())
