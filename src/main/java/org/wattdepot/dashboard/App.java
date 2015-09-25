@@ -51,9 +51,16 @@ public class App {
   public static void main(String[] args)  {
     // ensure there is history.
     DataBridge bridge = DataBridge.getInstance();
+    System.out.println("Initializing values.");
+    System.out.print("power history, ");
     bridge.updatePowerHistory();
+    System.out.print("hourly energy, ");
     bridge.updateHourlyEnergy();
+    System.out.println("daily energy, ");
     bridge.updateDailyEnergy();
+    System.out.println("sensor status.");
+    bridge.updateSensorStatus();
+    System.out.println("Starting tasks.");
     Timer timer = new Timer();
     timer.schedule(new CurrentPowerTask(), 100, 15000);
     timer.schedule(new HourlyEnergyTask(), 500, 60 * 60 * 1000);
