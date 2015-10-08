@@ -1,5 +1,5 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.wattdepot.dashboard</groupId>
   <artifactId>data-bridge</artifactId>
@@ -9,6 +9,7 @@
   <url>http://maven.apache.org</url>
   <properties>
     <targetJdk>1.7</targetJdk>
+    <compiler.plugin.version>3.3</compiler.plugin.version>
   </properties>
   <dependencies>
     <dependency>
@@ -30,7 +31,23 @@
     <dependency>
       <groupId>org.wattdepot</groupId>
       <artifactId>wattdepot</artifactId>
-      <version>3.1.0-SNAPSHOT</version>
+      <version>3.2.0-SNAPSHOT</version>
     </dependency>
   </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>${compiler.plugin.version}</version>
+        <configuration>
+          <source>1.7</source>
+          <target>1.7</target>
+          <compilerArgs>
+            <arg>-Xlint:all</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 </project>
