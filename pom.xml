@@ -10,6 +10,7 @@
   <properties>
     <targetJdk>1.7</targetJdk>
     <compiler.plugin.version>3.3</compiler.plugin.version>
+    <shade.plugin.version>2.3</shade.plugin.version>
   </properties>
   <dependencies>
     <dependency>
@@ -47,6 +48,49 @@
             <arg>-Xlint:all</arg>
           </compilerArgs>
         </configuration>
+      </plugin>
+      <!-- Create distribution during "package" phase -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>${shade.plugin.version}</version>
+        <configuration>
+          <filters>
+            <filter>
+              <artifact>*:*</artifact>
+              <excludes>
+                <exclude>LICENSE</exclude>
+                <exclude>META-INF/*.SF</exclude>
+                <exclude>META-INF/*.DSA</exclude>
+                <exclude>META-INF/*.RSA</exclude>
+              </excludes>
+            </filter>
+          </filters>
+          <transformers>
+            <transformer
+                implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+            <transformer
+                implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+              <manifestEntries>
+                <Main-Class>org.wattdepot.server.Server</Main-Class>
+                <Build-Number>${project.version}</Build-Number>
+              </manifestEntries>
+            </transformer>
+            <transformer
+                implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer"></transformer>
+            <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
+              <addHeader>false</addHeader>
+            </transformer>
+          </transformers>
+        </configuration>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>
