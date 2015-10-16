@@ -43,7 +43,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 /**
  * Runs the data bridge between WattDepot and the Hale Aloha Dashboard.
  */
-public class App {
+public class DataBridgeMain {
   /**
    * Main method.
    * @param args command line arguments, ignored.

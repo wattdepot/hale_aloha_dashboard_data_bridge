@@ -3,23 +3,18 @@ Java based data bridge from WattDepot to the Hale Aloha Dashboard
 
 ## Installation
 
-TODO: Describe the installation process
+The Hale Aloha Data Bridge must be run on the machine that is running the Hale Aloha Dashboard, https://github.com/wattdepot/hale_aloha_dashboard.git.
 
-## Usage
-
-TODO: Write usage instructions
-
-## Contributing
-
-1. Fork it!
-2. Create your feature branch: `git checkout -b my-new-feature`
-3. Commit your changes: `git commit -am 'Add some feature'`
-4. Push to the branch: `git push origin my-new-feature`
-5. Submit a pull request :D
+1. Install Maven, http://maven.apache.org/
+2. Clone WattDepot, https://github.com/wattdepot/wattdepot.git
+3. Using Maven install WattDepot 3.2.0. This project requires the WattDepot 3.2.0 Client to access the University of Hawaii, Manoa's WattDepot server.
+4. Clone the Hale Aloha Data Bridge, https://github.com/wattdepot/hale_aloha_dashboard_data_bridge.git
+5. Run `mvn package` in the `hale_aloha_dashboard_data_bridge` directory. This will produce `hale_aloha_dashboard_data_bridge/target/data-bridge-1.0.jar` file.
+6. Run `java -cp target/data-bridge-1.0.jar org.wattdepot.dashboard.DataBridgeMain` from the `hale_aloha_dashboard_data_bridge` directory.
 
 ## History
 
-TODO: Write history
+2015-10-16: Released version 1.0 of the Data Bridge.
 
 ## Credits
 

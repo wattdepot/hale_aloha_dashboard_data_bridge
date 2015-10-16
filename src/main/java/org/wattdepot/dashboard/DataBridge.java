@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * DataBridge - The bridge between WattDepot and the Hale Aloha Dashboard App.
+ * DataBridge - The bridge between WattDepot and the Hale Aloha Dashboard DataBridgeMain.
  *
  * @author Cam Moore
  */
