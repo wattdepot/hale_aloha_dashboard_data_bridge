@@ -22,6 +22,7 @@ Cam Moore
 Collaborative Software Development Laboratory, University of Hawaii, Manoa
 
 ## License
+The MIT License (MIT)
 
 Copyright (c) 2015 CSDL, Cam Moore
 
