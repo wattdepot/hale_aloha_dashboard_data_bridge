@@ -237,7 +237,7 @@ public class DataBridge {
    * @return The number of entries sent to the Hale Aloha Dashboard.
    */
   public Integer updateDailyEnergy() {
-    System.out.println("updateDailyEnergy");
+//    System.out.println("updateDailyEnergy");
     if (lastDailyEnergyUpdate == null) {
       clearDailyEnergy(); // want to delete any duplicates.
     }
@@ -293,7 +293,7 @@ public class DataBridge {
    * @return The number of entries removed.
    */
   public Integer clearDailyEnergy() {
-    System.out.println("clearDailyEnergy");
+//    System.out.println("clearDailyEnergy");
     Integer integer = null;
     for (SensorGroup group : towerList) {
       BasicDBObject remove = new BasicDBObject("tower", IdHelper.niceifyTowerId(group.getId()));
