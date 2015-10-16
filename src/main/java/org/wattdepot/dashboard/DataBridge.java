@@ -26,6 +26,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 
 /**
  * DataBridge - The bridge between WattDepot and the Hale Aloha Dashboard DataBridgeMain.
@@ -236,7 +237,7 @@ public class DataBridge {
    * @return The number of entries sent to the Hale Aloha Dashboard.
    */
   public Integer updateDailyEnergy() {
-//    System.out.println("updateDailyEnergy");
+    System.out.println("updateDailyEnergy");
     if (lastDailyEnergyUpdate == null) {
       clearDailyEnergy(); // want to delete any duplicates.
     }
@@ -288,10 +289,11 @@ public class DataBridge {
 
   /**
    * Removes all the daily energy data from the database.
+   *
    * @return The number of entries removed.
    */
   public Integer clearDailyEnergy() {
-//    System.out.println("clearDailyEnergy");
+    System.out.println("clearDailyEnergy");
     Integer integer = null;
     for (SensorGroup group : towerList) {
       BasicDBObject remove = new BasicDBObject("tower", IdHelper.niceifyTowerId(group.getId()));
@@ -310,6 +312,7 @@ public class DataBridge {
    * @return The number of entries added to the Hale Aloha Dashboard.
    */
   public Integer updateHourlyEnergy() {
+//    System.out.println("updateHourlyEnergy");
     Integer ret = 0;
     if (lastHourlyEnergyUpdate == null) {
       clearHourlyEnergy();
@@ -335,7 +338,8 @@ public class DataBridge {
         XMLGregorianCalendar nextDay = Tstamp.incrementDays(now, 1);
         List<XMLGregorianCalendar> times = Tstamp.getTimestampList(now, nextDay, 60);
         if (times != null) {
-          for (XMLGregorianCalendar time : times) {
+          for (int i = 1; i < times.size(); i++) {
+            XMLGregorianCalendar time = times.get(i);
             data = getHistoricalHourlyEnergyData(group, time, 7);
             BasicDBObject histObj = buildHourlyHistoryDBObject(data);
             this.predictedHourlyCollection.insert(histObj);
@@ -345,10 +349,14 @@ public class DataBridge {
       else if (Tstamp.diff(lastHourlyEnergyUpdate, now) > 60 * 60 * 1000) {
         List<XMLGregorianCalendar> times = Tstamp.getTimestampList(lastHourlyEnergyUpdate, now, 60);
         if (times != null) {
-          for (XMLGregorianCalendar time : times) {
-            data = getHistoricalHourlyEnergyData(group, time, 7);
-            BasicDBObject histObj = buildHourlyHistoryDBObject(data);
-            this.predictedHourlyCollection.insert(histObj);
+          System.out.println("update hourly prediction " + times);
+          for (int i = 1; i < times.size(); i++) {
+            XMLGregorianCalendar time = times.get(i);
+            if (Tstamp.diff(times.get(i - 1), time) > 59 * 60 * 1000) {
+              data = getHistoricalHourlyEnergyData(group, time, 7);
+              BasicDBObject histObj = buildHourlyHistoryDBObject(data);
+              this.predictedHourlyCollection.insert(histObj);
+            }
           }
         }
       }
@@ -359,10 +367,11 @@ public class DataBridge {
 
   /**
    * Removes all the hourly energy data from the database.
+   *
    * @return The number of entries removed.
    */
   public Integer clearHourlyEnergy() {
-//    System.out.println("clearDailyEnergy");
+//    System.out.println("clearHourlyEnergy");
     Integer integer = null;
     for (SensorGroup group : towerList) {
       BasicDBObject remove = new BasicDBObject("tower", IdHelper.niceifyTowerId(group.getId()));
@@ -379,6 +388,7 @@ public class DataBridge {
    * Updates the hourly power history for each tower. Should be run once an hour.
    */
   public void updatePowerHistory() {
+//    System.out.println("updatePowerHistory");
     for (SensorGroup tower : towerList) {
       DescriptiveStats values = client.getDescriptiveStats(powerDepository, tower, new Date(), false, 5, true);
       BasicDBObject remove = new BasicDBObject("tower", IdHelper.niceifyTowerId(tower.getId()));
@@ -393,6 +403,7 @@ public class DataBridge {
    * @return The number statues sent to the dashboard.
    */
   public Integer updateSensorStatus() {
+//    System.out.println("updateSensorStatus");
     Integer ret = 0;
     for (SensorGroup group : towerList) {
       SensorStatusList statusList = client.getSensorStatuses(powerDepository, group);
