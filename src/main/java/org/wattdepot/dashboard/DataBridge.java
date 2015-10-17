@@ -354,7 +354,7 @@ public class DataBridge {
       else if (Tstamp.diff(lastHourlyEnergyUpdate, now) > 60 * 60 * 1000) {
         List<XMLGregorianCalendar> times = Tstamp.getTimestampList(lastHourlyEnergyUpdate, now, 60);
         if (times != null) {
-          System.out.println("update hourly prediction " + times);
+//          System.out.println("update hourly prediction " + times);
           for (int i = 1; i < times.size(); i++) {
             XMLGregorianCalendar time = times.get(i);
             if (Tstamp.diff(times.get(i - 1), time) > 59 * 60 * 1000) {
