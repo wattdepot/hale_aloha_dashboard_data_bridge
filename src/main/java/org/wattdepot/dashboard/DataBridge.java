@@ -306,6 +306,7 @@ public class DataBridge {
         integer = new Integer(0);
       }
       integer += result.getN();
+      this.predictedDailyCollection.remove(remove);
     }
     return integer;
   }
@@ -384,6 +385,7 @@ public class DataBridge {
         integer = new Integer(0);
       }
       integer += result.getN();
+      this.predictedHourlyCollection.remove(remove);
     }
     return integer;
   }
