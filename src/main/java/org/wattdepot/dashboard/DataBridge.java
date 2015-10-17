@@ -265,7 +265,8 @@ public class DataBridge {
         XMLGregorianCalendar nextSeven = Tstamp.incrementDays(now, 7);
         List<XMLGregorianCalendar> times = Tstamp.getTimestampList(now, nextSeven, 24 * 60);
         if (times != null) {
-          for (XMLGregorianCalendar time : times) {
+          for (int i = 0; i < times.size() - 1; i++) {
+            XMLGregorianCalendar time = times.get(i);
             data = getHistoricalDailyEnergyData(group, time, 7);
             BasicDBObject histObj = buildDailyHistoryDBObject(data);
             this.predictedDailyCollection.insert(histObj);
@@ -275,10 +276,13 @@ public class DataBridge {
       else if (Tstamp.diff(lastDailyEnergyUpdate, now) > 24 * 60 * 60 * 1000) {
         List<XMLGregorianCalendar> times = Tstamp.getTimestampList(lastHourlyEnergyUpdate, now, 24 * 60);
         if (times != null) {
-          for (XMLGregorianCalendar time : times) {
-            data = getHistoricalHourlyEnergyData(group, time, 7);
-            BasicDBObject histObj = buildDailyHistoryDBObject(data);
-            this.predictedHourlyCollection.insert(histObj);
+          for (int i = 1; i < times.size(); i++) {
+            XMLGregorianCalendar time = times.get(i);
+            if (Tstamp.diff(times.get(i - 1), time) > 23.5 * 60 * 60 * 1000) {
+              data = getHistoricalHourlyEnergyData(group, time, 7);
+              BasicDBObject histObj = buildDailyHistoryDBObject(data);
+              this.predictedHourlyCollection.insert(histObj);
+            }
           }
         }
       }
