@@ -381,7 +381,7 @@ public class DataBridge {
         for (InterpolatedValue value : data.getInterpolatedValues()) {
           XMLGregorianCalendar time = DateConvert.convertDate(value.getStart());
           logger.info("prediction for " + time + " made");
-          InterpolatedValueList histData = getHistoricalDailyEnergyData(group, time, 7);
+          InterpolatedValueList histData = getHistoricalHourlyEnergyData(group, time, 7);
           BasicDBObject histObj = buildHourlyHistoryDBObject(data);
           this.predictedHourlyCollection.insert(histObj);
         }
