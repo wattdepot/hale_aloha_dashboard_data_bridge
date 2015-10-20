@@ -7,10 +7,46 @@
   <version>1.0</version>
   <name>data-bridge</name>
   <url>http://maven.apache.org</url>
+  <profiles>
+    <profile>
+      <id>dev</id>
+      <activation>
+        <property>
+          <name>profile</name>
+          <value>dev</value>
+        </property>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <properties>
+        <skip.assembly>true</skip.assembly>
+        <skip.checkstyle>false</skip.checkstyle>
+        <skip.findbugs>false</skip.findbugs>
+        <skip.pmd>false</skip.pmd>
+        <skipTests>false</skipTests>
+      </properties>
+    </profile>
+    <profile>
+      <id>rel</id>
+      <activation>
+        <property>
+          <name>profile</name>
+          <value>rel</value>
+        </property>
+      </activation>
+      <properties>
+        <skip.assembly>false</skip.assembly>
+        <skip.checkstyle>false</skip.checkstyle>
+        <skip.findbugs>false</skip.findbugs>
+        <skip.pmd>false</skip.pmd>
+        <skipTests>true</skipTests>
+      </properties>
+    </profile>
+  </profiles>
   <properties>
     <targetJdk>1.7</targetJdk>
     <compiler.plugin.version>3.3</compiler.plugin.version>
     <shade.plugin.version>2.3</shade.plugin.version>
+    <surefire.plugin.version>2.18</surefire.plugin.version>
   </properties>
   <dependencies>
     <dependency>
@@ -47,6 +83,21 @@
           <compilerArgs>
             <arg>-Xlint:all</arg>
           </compilerArgs>
+        </configuration>
+      </plugin>
+      <!-- Run JUnit tests during "test" phase -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>${surefire.plugin.version}</version>
+        <configuration>
+          <!-- Sets the VM argument line used when unit tests are run. -->
+          <argLine>${surefireArgLine}</argLine>
+          <skipTests>${skipTests}</skipTests>
+          <excludes>
+            <exclude>**/TestDb*.java</exclude>
+            <exclude>**/TestMeasurementGarbageCollector.java</exclude>
+          </excludes>
         </configuration>
       </plugin>
       <!-- Create distribution during "package" phase -->
@@ -116,7 +167,10 @@
     <url>https://github.com/wattdepot/hale_aloha_dashboard_data_bridge/issues</url>
     <system>GitHub Issues</system>
   </issueManagement>
-  <description>The Hale Aloha Data Bridge is an application that mines the WattDepot (http://wattdepot.org/) server for the University of Hawaii, Manoa. It gathers power and energy data for the four towers of the Hale Aloha dormitory. It creates MongoDB records and stores them in the Hale Aloha database.  This updates the Hale Aloha Dashboard Meteor application.
+  <description>The Hale Aloha Data Bridge is an application that mines the WattDepot (http://wattdepot.org/) server for
+    the University of Hawaii, Manoa. It gathers power and energy data for the four towers of the Hale Aloha dormitory.
+    It creates MongoDB records and stores them in the Hale Aloha database. This updates the Hale Aloha Dashboard Meteor
+    application.
   </description>
   <licenses>
     <license>

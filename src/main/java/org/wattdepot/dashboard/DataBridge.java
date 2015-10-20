@@ -4,6 +4,7 @@ import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
+import com.mongodb.DBObject;
 import com.mongodb.MongoClient;
 import com.mongodb.WriteResult;
 import org.wattdepot.client.http.api.WattDepotClient;
@@ -18,6 +19,7 @@ import org.wattdepot.common.exception.IdNotFoundException;
 import org.wattdepot.common.util.DateConvert;
 import org.wattdepot.common.util.tstamp.Tstamp;
 
+import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.XMLGregorianCalendar;
 import java.net.UnknownHostException;
 import java.text.SimpleDateFormat;
@@ -26,6 +28,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -143,25 +147,11 @@ public class DataBridge {
    */
   private ArrayList<SensorGroup> towerList;
   /**
-   * The timestamp of the last hourly energy update.
-   */
-  private XMLGregorianCalendar lastHourlyEnergyUpdate;
-  /**
-   * The timestamp of the last daily energy update.
-   */
-  private XMLGregorianCalendar lastDailyEnergyUpdate;
-  /**
-   * The timestamp of the last sensor status update.
-   */
-  private XMLGregorianCalendar lastSensorStatusUpdate;
-  /**
    * The houly power history for each tower. Should be updated hourly.
    */
   private Map<SensorGroup, DescriptiveStats> powerHistory;
-  /**
-   * The daily energy history for each tower. Should be updated daily.
-   */
-  private Map<SensorGroup, DescriptiveStats> energyHistory;
+
+  private static Logger logger = Logger.getLogger("data_bridge");
 
   /**
    * Creates a new DataBridge initializing the MongoDB and WattDepot clients.
@@ -189,7 +179,11 @@ public class DataBridge {
       }
     }
     this.powerHistory = new HashMap<SensorGroup, DescriptiveStats>();
-    this.energyHistory = new HashMap<SensorGroup, DescriptiveStats>();
+    ConsoleHandler handler = new ConsoleHandler();
+    logger.addHandler(handler);
+    logger.setLevel(Level.FINEST);
+    initializeDailyEnergy();
+    initializeHourlyEnergy();
   }
 
   /**
@@ -232,63 +226,77 @@ public class DataBridge {
   }
 
   /**
+   * Clears the database of all daily energy data and inserts 30 days worth of usage data and 7 days of predicted.
+   */
+  public void initializeDailyEnergy() {
+    clearDailyEnergy();
+    XMLGregorianCalendar now = Tstamp.makeTimestamp();
+    XMLGregorianCalendar thirtyDaysAgo = Tstamp.incrementDays(now, -30);
+    XMLGregorianCalendar nextSeven = Tstamp.incrementDays(now, 6); // going to get historical data for today also.
+    InterpolatedValueList data = null;
+    ArrayList<BasicDBObject> objects = null;
+    for (SensorGroup group : towerList) {
+      logger.info("loading daily energy data for tower " + IdHelper.niceifyTowerId(group.getId()));
+      // 30 days of historical usage
+      data = getDailyEnergyData(group, thirtyDaysAgo, now);
+      objects = buildDBFromInterpolatedValues(data);
+      for (BasicDBObject doc : objects) {
+        this.dailyCollection.insert(doc);
+      }
+      // Get next 7 day predictions
+      List<XMLGregorianCalendar> times = Tstamp.getTimestampList(now, nextSeven, 24 * 60);
+      if (times != null) {
+        for (int i = 0; i < times.size(); i++) {
+          XMLGregorianCalendar time = times.get(i);
+          data = getHistoricalDailyEnergyData(group, time, 7);
+          BasicDBObject histObj = buildDailyHistoryDBObject(data);
+          this.predictedDailyCollection.insert(histObj);
+        }
+      }
+    }
+  }
+
+  /**
    * Updates the daily energy and history for each tower.
    *
    * @return The number of entries sent to the Hale Aloha Dashboard.
    */
-  public Integer updateDailyEnergy() {
-//    System.out.println("updateDailyEnergy");
-    if (lastDailyEnergyUpdate == null) {
-      clearDailyEnergy(); // want to delete any duplicates.
-    }
-    Integer ret = 0;
+  public void updateDailyEnergy() {
     XMLGregorianCalendar now = Tstamp.makeTimestamp();
+    InterpolatedValueList data = null;
+    ArrayList<BasicDBObject> objects = null;
     for (SensorGroup group : towerList) {
-      InterpolatedValueList data = null;
-      ArrayList<BasicDBObject> objects = null;
-      if (lastDailyEnergyUpdate == null) {
-        XMLGregorianCalendar thirtyDaysAgo = Tstamp.incrementDays(now, -30);
-        data = getDailyEnergyData(group, thirtyDaysAgo, now);
-      }
-      else {
-        data = getDailyEnergyData(group, lastDailyEnergyUpdate, now);
-      }
-      objects = buildDBFromInterpolatedValues(data);
-      ret += objects.size();
-      for (BasicDBObject doc : objects) {
-        this.dailyCollection.insert(doc);
-      }
-      DescriptiveStats historicalValues = this.client.getDescriptiveStats(energyDepository, group, new Date(), true, 5, false);
-      energyHistory.put(group, historicalValues);
-      if (lastDailyEnergyUpdate == null) { // have not run before
-        // get next 7 days prediction (historical)
-        XMLGregorianCalendar nextSeven = Tstamp.incrementDays(now, 7);
-        List<XMLGregorianCalendar> times = Tstamp.getTimestampList(now, nextSeven, 24 * 60);
-        if (times != null) {
-          for (int i = 0; i < times.size() - 1; i++) {
-            XMLGregorianCalendar time = times.get(i);
-            data = getHistoricalDailyEnergyData(group, time, 7);
-            BasicDBObject histObj = buildDailyHistoryDBObject(data);
-            this.predictedDailyCollection.insert(histObj);
-          }
+      BasicDBObject find = new BasicDBObject("tower", IdHelper.niceifyTowerId(group.getId()));
+      DBObject mostRecent = null;
+      for (DBObject rec : this.dailyCollection.find(find)) {
+        if (mostRecent == null) {
+          mostRecent = rec;
+        }
+        else if (((Date) mostRecent.get("date")).getTime() < ((Date) rec.get("date")).getTime()) {
+          mostRecent = rec;
         }
       }
-      else if (Tstamp.diff(lastDailyEnergyUpdate, now) > 24 * 60 * 60 * 1000) {
-        List<XMLGregorianCalendar> times = Tstamp.getTimestampList(lastHourlyEnergyUpdate, now, 24 * 60);
-        if (times != null) {
-          for (int i = 1; i < times.size(); i++) {
-            XMLGregorianCalendar time = times.get(i);
-            if (Tstamp.diff(times.get(i - 1), time) > 23.5 * 60 * 60 * 1000) {
-              data = getHistoricalHourlyEnergyData(group, time, 7);
-              BasicDBObject histObj = buildDailyHistoryDBObject(data);
-              this.predictedHourlyCollection.insert(histObj);
-            }
-          }
+      try {
+        XMLGregorianCalendar last = DateConvert.convertDate(((Date) mostRecent.get("date")));
+        data = getDailyEnergyData(group, last, now);
+        objects = buildDBFromInterpolatedValues(data);
+        logger.info(IdHelper.niceifyTowerId(group.getId()) + ": " + objects.size() + " records added");
+        for (BasicDBObject doc : objects) {
+          this.dailyCollection.insert(doc);
         }
+        // do we need to create prediction?
+        for (InterpolatedValue value : data.getInterpolatedValues()) {
+          XMLGregorianCalendar time = DateConvert.convertDate(value.getStart());
+          logger.info("prediction for " + time + " made");
+          InterpolatedValueList histData = getHistoricalDailyEnergyData(group, time, 7);
+          BasicDBObject histObj = buildDailyHistoryDBObject(data);
+          this.predictedDailyCollection.insert(histObj);
+        }
+      }
+      catch (DatatypeConfigurationException e) {
+        e.printStackTrace();
       }
     }
-    lastDailyEnergyUpdate = now;
-    return ret;
   }
 
   /**
@@ -296,10 +304,10 @@ public class DataBridge {
    *
    * @return The number of entries removed.
    */
-  public Integer clearDailyEnergy() {
-//    System.out.println("clearDailyEnergy");
+  private Integer clearDailyEnergy() {
     Integer integer = null;
     for (SensorGroup group : towerList) {
+      logger.info("clearing daily data for " + IdHelper.niceifyTowerId(group.getId()));
       BasicDBObject remove = new BasicDBObject("tower", IdHelper.niceifyTowerId(group.getId()));
       WriteResult result = this.dailyCollection.remove(remove);
       if (integer == null) {
@@ -312,73 +320,88 @@ public class DataBridge {
   }
 
   /**
+   * Initializes the hourly energy data, both the historical usage and the predicted usage for 24 hours.
+   */
+  public void initializeHourlyEnergy() {
+    clearHourlyEnergy();
+    XMLGregorianCalendar now = Tstamp.makeTimestamp();
+    XMLGregorianCalendar oneDayAgo = Tstamp.incrementDays(now, -1);
+    XMLGregorianCalendar nextDay = Tstamp.incrementDays(now, 1);
+    InterpolatedValueList data = null;
+    ArrayList<BasicDBObject> objects = null;
+    for (SensorGroup group : towerList) {
+      logger.info("loading hourly energy data for tower " + IdHelper.niceifyTowerId(group.getId()));
+      data = getHourlyEnergyData(group, oneDayAgo, now);
+      objects = buildDBFromInterpolatedValues(data);
+      for (BasicDBObject doc : objects) {
+        this.hourlyCollection.insert(doc);
+      }
+      // get the prediction for the next 24 hours
+      List<XMLGregorianCalendar> times = Tstamp.getTimestampList(now, nextDay, 60);
+      if (times != null) {
+        for (int i = 1; i < times.size(); i++) {
+          XMLGregorianCalendar time = times.get(i);
+          data = getHistoricalHourlyEnergyData(group, time, 7);
+          BasicDBObject histObj = buildHourlyHistoryDBObject(data);
+          this.predictedHourlyCollection.insert(histObj);
+        }
+      }
+    }
+  }
+
+  /**
    * Updates the hourly energy, returning the number of entries added to the Hale Aloha Dashboard.
    *
    * @return The number of entries added to the Hale Aloha Dashboard.
    */
-  public Integer updateHourlyEnergy() {
-//    System.out.println("updateHourlyEnergy");
-    Integer ret = 0;
-    if (lastHourlyEnergyUpdate == null) {
-      clearHourlyEnergy();
-    }
+  public void updateHourlyEnergy() {
     XMLGregorianCalendar now = Tstamp.makeTimestamp();
+    InterpolatedValueList data = null;
+    ArrayList<BasicDBObject> objects = null;
     for (SensorGroup group : towerList) {
-      InterpolatedValueList data = null;
-      ArrayList<BasicDBObject> objects = null;
-      if (lastHourlyEnergyUpdate == null) {
-        XMLGregorianCalendar oneDayAgo = Tstamp.incrementDays(now, -1);
-        data = getHourlyEnergyData(group, oneDayAgo, now);
-      }
-      else {
-        data = getHourlyEnergyData(group, lastHourlyEnergyUpdate, now);
-      }
-      objects = buildDBFromInterpolatedValues(data);
-      ret += objects.size();
-      for (BasicDBObject doc : objects) {
-        this.hourlyCollection.insert(doc);
-      }
-      if (lastHourlyEnergyUpdate == null) { // have not run before
-        // get 24 hours historical data
-        XMLGregorianCalendar nextDay = Tstamp.incrementDays(now, 1);
-        List<XMLGregorianCalendar> times = Tstamp.getTimestampList(now, nextDay, 60);
-        if (times != null) {
-          for (int i = 1; i < times.size(); i++) {
-            XMLGregorianCalendar time = times.get(i);
-            data = getHistoricalHourlyEnergyData(group, time, 7);
-            BasicDBObject histObj = buildHourlyHistoryDBObject(data);
-            this.predictedHourlyCollection.insert(histObj);
-          }
+      BasicDBObject find = new BasicDBObject("tower", IdHelper.niceifyTowerId(group.getId()));
+      DBObject mostRecent = null;
+      for (DBObject rec : this.hourlyCollection.find(find)) {
+        if (mostRecent == null) {
+          mostRecent = rec;
+        }
+        else if (((Date) mostRecent.get("date")).getTime() < ((Date) rec.get("date")).getTime()) {
+          mostRecent = rec;
         }
       }
-      else if (Tstamp.diff(lastHourlyEnergyUpdate, now) > 60 * 60 * 1000) {
-        List<XMLGregorianCalendar> times = Tstamp.getTimestampList(lastHourlyEnergyUpdate, now, 60);
-        if (times != null) {
-//          System.out.println("update hourly prediction " + times);
-          for (int i = 1; i < times.size(); i++) {
-            XMLGregorianCalendar time = times.get(i);
-            if (Tstamp.diff(times.get(i - 1), time) > 59 * 60 * 1000) {
-              data = getHistoricalHourlyEnergyData(group, time, 7);
-              BasicDBObject histObj = buildHourlyHistoryDBObject(data);
-              this.predictedHourlyCollection.insert(histObj);
-            }
-          }
+      try {
+        XMLGregorianCalendar last = DateConvert.convertDate(((Date) mostRecent.get("date")));
+        data = getHourlyEnergyData(group, last, now);
+        objects = buildDBFromInterpolatedValues(data);
+        logger.info(IdHelper.niceifyTowerId(group.getId()) + ": " + objects.size() + " records added");
+        for (BasicDBObject doc : objects) {
+          this.hourlyCollection.insert(doc);
         }
+        // do we need to create prediction?
+        for (InterpolatedValue value : data.getInterpolatedValues()) {
+          XMLGregorianCalendar time = DateConvert.convertDate(value.getStart());
+          logger.info("prediction for " + time + " made");
+          InterpolatedValueList histData = getHistoricalDailyEnergyData(group, time, 7);
+          BasicDBObject histObj = buildHourlyHistoryDBObject(data);
+          this.predictedHourlyCollection.insert(histObj);
+        }
+      }
+      catch (DatatypeConfigurationException e) {
+        e.printStackTrace();
       }
     }
-    lastHourlyEnergyUpdate = now;
-    return ret;
   }
+
 
   /**
    * Removes all the hourly energy data from the database.
    *
    * @return The number of entries removed.
    */
-  public Integer clearHourlyEnergy() {
-//    System.out.println("clearHourlyEnergy");
+  private Integer clearHourlyEnergy() {
     Integer integer = null;
     for (SensorGroup group : towerList) {
+      logger.info("clearing hourly data for " + IdHelper.niceifyTowerId(group.getId()));
       BasicDBObject remove = new BasicDBObject("tower", IdHelper.niceifyTowerId(group.getId()));
       WriteResult result = this.hourlyCollection.remove(remove);
       if (integer == null) {
@@ -394,8 +417,8 @@ public class DataBridge {
    * Updates the hourly power history for each tower. Should be run once an hour.
    */
   public void updatePowerHistory() {
-//    System.out.println("updatePowerHistory");
     for (SensorGroup tower : towerList) {
+      logger.info("update power history for " + IdHelper.niceifyTowerId(tower.getId()));
       DescriptiveStats values = client.getDescriptiveStats(powerDepository, tower, new Date(), false, 5, true);
       BasicDBObject remove = new BasicDBObject("tower", IdHelper.niceifyTowerId(tower.getId()));
       powerHistory.remove(remove);
@@ -409,9 +432,9 @@ public class DataBridge {
    * @return The number statues sent to the dashboard.
    */
   public Integer updateSensorStatus() {
-//    System.out.println("updateSensorStatus");
     Integer ret = 0;
     for (SensorGroup group : towerList) {
+      logger.info("update sensor status for " + IdHelper.niceifyTowerId(group.getId()));
       SensorStatusList statusList = client.getSensorStatuses(powerDepository, group);
       ArrayList<BasicDBObject> objects = buildDBFromSensorStatusList(statusList);
       ret += objects.size();
