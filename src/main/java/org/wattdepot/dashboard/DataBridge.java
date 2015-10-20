@@ -420,8 +420,6 @@ public class DataBridge {
     for (SensorGroup tower : towerList) {
       logger.info("update power history for " + IdHelper.niceifyTowerId(tower.getId()));
       DescriptiveStats values = client.getDescriptiveStats(powerDepository, tower, new Date(), false, 5, true);
-      BasicDBObject remove = new BasicDBObject("tower", IdHelper.niceifyTowerId(tower.getId()));
-      powerHistory.remove(remove);
       powerHistory.put(tower, values);
     }
   }
