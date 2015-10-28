@@ -289,7 +289,7 @@ public class DataBridge {
           XMLGregorianCalendar time = DateConvert.convertDate(value.getStart());
           logger.info("prediction for " + time + " made");
           InterpolatedValueList histData = getHistoricalDailyEnergyData(group, time, 7);
-          BasicDBObject histObj = buildDailyHistoryDBObject(data);
+          BasicDBObject histObj = buildDailyHistoryDBObject(histData);
           this.predictedDailyCollection.insert(histObj);
         }
       }
